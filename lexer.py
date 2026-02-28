@@ -1,10 +1,10 @@
 KEYWORDS = {
     "class","public","static","void","int","double","String",
-    "if","else","for","while","return","new","boolean","char"
+    "if","else","for","while","return","new","boolean","char",
 }
 
 OPERADORES_DOBLES = {"==","!=","<=",">=","++","--","+=","-=","*=","/="}
-SIMBOLOS = "{}();,."
+SIMBOLOS = "{}();,.[]"
 
 def es_letra(c):
     return c.isalpha() or c == "_"
@@ -63,7 +63,7 @@ def analizador_lexico(codigo):
 
             tokens.append((tipo, lexema, linea, col))
 
-            if tipo == "IDENTIFICADOR":
+            if tipo == "IDENTIFICADOR": 
                 if lexema not in tabla_simbolos:
                     tabla_simbolos[lexema] = {
                         "tipo": "ID",
