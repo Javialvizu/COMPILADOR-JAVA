@@ -1,4 +1,5 @@
 let pyodide;
+let pyodideReady = false;
 
 async function iniciarPyodide(){
   pyodide = await loadPyodide();
@@ -7,11 +8,36 @@ async function iniciarPyodide(){
   const codigoPython = await response.text();
 
   await pyodide.runPythonAsync(codigoPython);
+
+  pyodideReady = true;
 }
 
 iniciarPyodide();
 
+
+// 📂 INPUT FILE (VA FUERA DE ANALIZAR)
+document.getElementById("fileInput").addEventListener("change", function(e){
+
+  const file = e.target.files[0];
+  if(!file) return;
+
+  const reader = new FileReader();
+
+  reader.onload = function(event){
+      document.getElementById("editor").value = event.target.result;
+  };
+
+  reader.readAsText(file);
+});
+
+
+// ▶️ ANALIZAR
 async function analizar(){
+
+  if(!pyodideReady){
+    alert("Pyodide aún está cargando...");
+    return;
+  }
 
   const codigo = document.getElementById("editor").value;
 
@@ -28,6 +54,8 @@ async function analizar(){
   mostrarSimbolos(simbolos);
 }
 
+
+// 🧾 TOKENS
 function mostrarTokens(tokens){
   let tabla = document.getElementById("tablaTokens");
   tabla.innerHTML="";
@@ -44,6 +72,8 @@ function mostrarTokens(tokens){
   });
 }
 
+
+// ❌ ERRORES
 function mostrarErrores(errores){
   let tabla = document.getElementById("tablaErrores");
   tabla.innerHTML="";
@@ -59,6 +89,8 @@ function mostrarErrores(errores){
   });
 }
 
+
+// 🧠 TABLA DE SÍMBOLOS
 function mostrarSimbolos(simbolos){
   let tabla = document.getElementById("tablaSimbolos");
   tabla.innerHTML="";
