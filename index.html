@@ -1,18 +1,51 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
-    <meta charset="UTF-8"> 
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Analizador Lexico Java</title> 
-    <style>
-        body {
-            font-family: Arial, sans-serif; 
-            margin: 0;
-            padding: 20px;
-        }
-    </style>
+<meta charset="UTF-8">
+<title>Analizador Léxico Java</title>
+<link rel="stylesheet" href="style.css">
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
 </head>
+
 <body>
+
+<div class="topbar">Analizador Léxico Java</div>
+
+<div class="content">
+
+<div class="editor-panel">
+<textarea id="editor">// Escribe código Java aquí</textarea>
+<button onclick="analizar()">▶ Analizar</button>
+</div>
+
+<div class="panel">
+<h3>Tokens</h3>
+<table>
+<thead>
+<tr><th>#</th><th>Token</th><th>Lexema</th><th>L</th><th>C</th></tr>
+</thead>
+<tbody id="tablaTokens"></tbody>
+</table>
+</div>
+
+<div class="panel">
+<h3>Tabla de Símbolos</h3>
+<table>
+<tbody id="tablaSimbolos"></tbody>
+</table>
+</div>
+
+<div class="panel">
+<h3>Errores Léxicos</h3>
+<table>
+<tbody id="tablaErrores"></tbody>
+</table>
+</div>
+
+</div>
+
+<script src="main.js"></script>
 
 </body>
 </html>
