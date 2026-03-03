@@ -4,7 +4,7 @@ KEYWORDS = {
 }
 
 OPERADORES_DOBLES = {"==","!=","<=",">=","++","--","+=","-=","*=","/="}
-SIMBOLOS = "{}();,."
+SIMBOLOS = "{}();,.[]"
 
 def es_letra(c):
     return c.isalpha() or c == "_"
