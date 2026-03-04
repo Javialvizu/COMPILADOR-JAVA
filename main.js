@@ -33,7 +33,6 @@ document.getElementById("fileInput").addEventListener("change", function(e){
 });
 
 
-// ▶️ ANALIZAR
 async function analizar(){
 
   if(!pyodideReady){
@@ -59,7 +58,6 @@ async function analizar(){
 }
 
 
-// 🧾 TOKENS
 function mostrarTokens(tokens){
   let tabla = document.getElementById("tablaTokens");
   tabla.innerHTML="";
@@ -77,7 +75,6 @@ function mostrarTokens(tokens){
 }
 
 
-// ❌ ERRORES
 function mostrarErrores(errores){
   let tabla = document.getElementById("tablaErrores");
   tabla.innerHTML="";
@@ -94,7 +91,6 @@ function mostrarErrores(errores){
 }
 
 
-// 🧠 TABLA DE SÍMBOLOS
 function mostrarSimbolos(simbolos){
   let tabla = document.getElementById("tablaSimbolos");
   tabla.innerHTML="";
