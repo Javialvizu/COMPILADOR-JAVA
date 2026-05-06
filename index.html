@@ -32,7 +32,26 @@
 
 <!-- Main Content -->
 <div class="container">
-  
+  <div class="info-card">
+    <div class="section-header">
+      <h2><i class="fas fa-brain"></i> Fase 3: Análisis Semántico</h2>
+    </div>
+    <div class="info-content">
+      <p>Esta fase asegura que el programa, además de estar bien escrito, tenga un significado lógico y coherente según las reglas del lenguaje.</p>
+      <ul>
+        <li><strong>Objetivo:</strong> Validar la lógica del programa y gestionar la Tabla de Símbolos.</li>
+        <li><strong>Validaciones Clave:</strong>
+          <ul>
+            <li>Chequeo de Tipos: evitar operaciones entre tipos incompatibles.</li>
+            <li>Gestión de Ámbitos: diferenciar variables locales de globales.</li>
+            <li>Declaración Previa: asegurar que ningún identificador se use sin haber sido definido.</li>
+          </ul>
+        </li>
+        <li><strong>Entregable:</strong> Tabla de símbolos completa y reporte de errores semánticos.</li>
+      </ul>
+    </div>
+  </div>
+
   <!-- Editor Section -->
   <div class="editor-section">
     <div class="section-header">
@@ -62,6 +81,16 @@
   <div class="output-section">
     <div class="section-header">
       <h2><i class="fas fa-terminal"></i> Resultados del Análisis</h2>
+    </div>
+
+    <div class="detail-card">
+      <h3><i class="fas fa-file-alt"></i> Reporte Detallado de Errores</h3>
+      <p>Este proyecto muestra los errores de forma detallada, indicando descripción, línea y columna para errores sintácticos y semánticos.</p>
+      <ul>
+        <li>Errores sintácticos con mensaje claro y ubicación exacta.</li>
+        <li>Errores semánticos con chequeo de tipos y declaración previa.</li>
+        <li>Descarga de resultado con el mismo nivel de detalle.</li>
+      </ul>
     </div>
 
     <!-- Tabs Navigation -->
@@ -152,10 +181,10 @@
         <div class="table-scroll">
           <table>
             <thead>
-              <tr><th>Descripción del Error</th></tr>
+              <tr><th>Descripción del Error</th><th>Línea</th><th>Columna</th></tr>
             </thead>
             <tbody id="tablaErroresSintacticos">
-              <tr><td class="empty-state success">✓ Sin errores sintácticos</td></tr>
+              <tr><td class="empty-state success" colspan="3">✓ Sin errores sintácticos</td></tr>
             </tbody>
           </table>
         </div>
@@ -188,10 +217,10 @@
         <div class="table-scroll">
           <table>
             <thead>
-              <tr><th>Descripción del Error</th></tr>
+              <tr><th>Descripción del Error</th><th>Línea</th><th>Columna</th></tr>
             </thead>
             <tbody id="tablaErroresSemanticos">
-              <tr><td class="empty-state success">✓ Sin errores semánticos</td></tr>
+              <tr><td class="empty-state success" colspan="3">✓ Sin errores semánticos</td></tr>
             </tbody>
           </table>
         </div>
