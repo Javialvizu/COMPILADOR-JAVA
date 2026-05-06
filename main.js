@@ -213,8 +213,8 @@ function parseErrorDetail(error) {
     return { description: error[0], line: error[2], column: error[3] };
   }
 
-  const detalle = String(error);
-  const regex = /^(.+?)\s*-\s*línea\s+(\d+)$/;
+  const detalle = String(error).trim();
+  const regex = /^(.+?)(?:\s*-\s*|\s+en\s+l[ií]nea\s+)(\d+)(?:\s+columna\s+(\d+))?$/i;
   const match = detalle.match(regex);
   if (match) {
     return { description: match[1].trim(), line: match[2], column: match[3] || '' };
@@ -250,13 +250,17 @@ function mostrarErroresSemanticos(errores){
   let tabla = document.getElementById("tablaErroresSemanticos");
   tabla.innerHTML="";
 
-  if (errores.length === 0) {
+  const listaErrores = Array.isArray(errores) ? errores : [errores];
+
+  if (listaErrores.length === 0 || (listaErrores.length === 1 && !listaErrores[0])) {
     tabla.innerHTML = '<tr><td class="empty-state success" colspan="3">✓ Sin errores semánticos</td></tr>';
     document.getElementById("sem-error-count").textContent = "0 errores";
     return;
   }
 
-  errores.forEach(e=>{
+  console.log("Errores semánticos detectados:", listaErrores);
+
+  listaErrores.forEach(e=>{
     const detalle = parseErrorDetail(e);
     tabla.innerHTML += `
     <tr>
@@ -266,7 +270,7 @@ function mostrarErroresSemanticos(errores){
     </tr>`;
   });
 
-  document.getElementById("sem-error-count").textContent = `${errores.length} errores`;
+  document.getElementById("sem-error-count").textContent = `${listaErrores.length} errores`;
 }
 
 function mostrarAST(ast){
