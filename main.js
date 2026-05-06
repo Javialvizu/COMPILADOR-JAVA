@@ -214,7 +214,7 @@ function parseErrorDetail(error) {
   }
 
   const detalle = String(error);
-  const regex = /(.+?)\s+en línea\s+(\d+)(?:\s+columna\s+(\d+))?$/;
+  const regex = /^(.+?)\s*-\s*línea\s+(\d+)$/;
   const match = detalle.match(regex);
   if (match) {
     return { description: match[1].trim(), line: match[2], column: match[3] || '' };

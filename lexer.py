@@ -294,7 +294,7 @@ class SemanticAnalyzer:
     def declare_variable(self, name, var_type, line):
         current_scope = self.scope_stack[-1]
         if name in current_scope:
-            self.errors.append(f"SEM-001: Error semántico: variable '{name}' ya declarada en línea {line}")
+            self.errors.append(f"SEM-001: Error semántico: variable '{name}' ya declarada - línea {line}")
         else:
             current_scope[name] = {"type": var_type, "line": line}
 
@@ -334,15 +334,15 @@ class SemanticAnalyzer:
             if "init" in stmt:
                 expr_type = self.analyze_expression(stmt["init"])
                 if expr_type and expr_type != stmt["var_type"]:
-                    self.errors.append(f"SEM-003: Error semántico: tipo incompatible en inicialización para '{stmt['name']}' en línea 1")
+                    self.errors.append(f"SEM-003: Error semántico: tipo incompatible en inicialización para '{stmt['name']}' - línea 1")
         elif stmt.get("type") == "Assignment":
             var_info = self.lookup_variable(stmt["name"])
             if not var_info:
-                self.errors.append(f"SEM-002: Error semántico: variable '{stmt['name']}' no declarada en línea 1")
+                self.errors.append(f"SEM-002: Error semántico: variable '{stmt['name']}' no declarada - línea 1")
             else:
                 expr_type = self.analyze_expression(stmt["expr"])
                 if expr_type and expr_type != var_info["type"]:
-                    self.errors.append(f"SEM-003: Error semántico: tipo incompatible en asignación para '{stmt['name']}' en línea 1")
+                    self.errors.append(f"SEM-003: Error semántico: tipo incompatible en asignación para '{stmt['name']}' - línea 1")
         elif stmt.get("type") == "IfStatement":
             self.analyze_expression(stmt["condition"])
             self.enter_scope()
@@ -386,10 +386,10 @@ class SemanticAnalyzer:
                 elif op in [">", "<", ">=", "<=", "==", "!="]:
                     return "boolean"
                 else:
-                    self.errors.append("SEM-005: Operador no soportado en línea 1")
+                    self.errors.append("SEM-005: Operador no soportado - línea 1")
                     return None
             else:
-                self.errors.append("SEM-004: Error semántico: tipos incompatibles en operación en línea 1")
+                self.errors.append("SEM-004: Error semántico: tipos incompatibles en operación - línea 1")
                 return None
         return None
 
