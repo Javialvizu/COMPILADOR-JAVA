@@ -207,20 +207,39 @@ function mostrarSimbolos(simbolos){
   document.getElementById("symbol-count").textContent = `${entries.length} símbolos`;
 }
 
+function parseErrorDetail(error) {
+  if (!error) return { description: '', line: '', column: '' };
+  if (Array.isArray(error) && error.length >= 4) {
+    return { description: error[0], line: error[2], column: error[3] };
+  }
+
+  const detalle = String(error);
+  const regex = /(.+?)\s+en línea\s+(\d+)(?:\s+columna\s+(\d+))?$/;
+  const match = detalle.match(regex);
+  if (match) {
+    return { description: match[1].trim(), line: match[2], column: match[3] || '' };
+  }
+
+  return { description: detalle, line: '', column: '' };
+}
+
 function mostrarErroresSintacticos(errores){
   let tabla = document.getElementById("tablaErroresSintacticos");
   tabla.innerHTML="";
 
   if (errores.length === 0) {
-    tabla.innerHTML = '<tr><td class="empty-state success">✓ Sin errores sintácticos</td></tr>';
+    tabla.innerHTML = '<tr><td class="empty-state success" colspan="3">✓ Sin errores sintácticos</td></tr>';
     document.getElementById("sint-error-count").textContent = "0 errores";
     return;
   }
 
   errores.forEach(e=>{
+    const detalle = parseErrorDetail(e);
     tabla.innerHTML += `
     <tr>
-      <td><span style="color: #fca5a5;">${e}</span></td>
+      <td><span style="color: #fca5a5;">${detalle.description}</span></td>
+      <td>${detalle.line}</td>
+      <td>${detalle.column}</td>
     </tr>`;
   });
 
@@ -232,15 +251,18 @@ function mostrarErroresSemanticos(errores){
   tabla.innerHTML="";
 
   if (errores.length === 0) {
-    tabla.innerHTML = '<tr><td class="empty-state success">✓ Sin errores semánticos</td></tr>';
+    tabla.innerHTML = '<tr><td class="empty-state success" colspan="3">✓ Sin errores semánticos</td></tr>';
     document.getElementById("sem-error-count").textContent = "0 errores";
     return;
   }
 
   errores.forEach(e=>{
+    const detalle = parseErrorDetail(e);
     tabla.innerHTML += `
     <tr>
-      <td><span style="color: #fca5a5;">${e}</span></td>
+      <td><span style="color: #fca5a5;">${detalle.description}</span></td>
+      <td>${detalle.line}</td>
+      <td>${detalle.column}</td>
     </tr>`;
   });
 
