@@ -105,11 +105,44 @@ async function analizar(){
     let resultadoSemantic = pyodide.runPython(`analizador_semantico(ast, simbolos)`);
     console.log("Raw Pyodide result for semantic:", resultadoSemantic, "type:", typeof resultadoSemantic);
     
-    let [simbolosActualizados, erroresSemanticos] = resultadoSemantic.toJs({
-      dict_converter: (d) => Object.assign({}, ...Array.from(d.items()).map(([k, v]) => ({[k]: v})))
-    });
-    console.log("After toJs conversion - Simbolos:", simbolosActualizados);
-    console.log("After toJs conversion - Semantic errors:", erroresSemanticos, "type:", typeof erroresSemanticos, "is array:", Array.isArray(erroresSemanticos));
+    // Convert more carefully - handle dict/list conversion properly
+    let simbolosActualizados = {};
+    let erroresSemanticos = [];
+    
+    try {
+      // Convert tuple to JS - get first element (simbolos dict) and second element (errors list)
+      let simbolosRaw = resultadoSemantic[0];
+      let erroresRaw = resultadoSemantic[1];
+      
+      console.log("simbolosRaw:", simbolosRaw, "type:", typeof simbolosRaw);
+      console.log("erroresRaw:", erroresRaw, "type:", typeof erroresRaw, "length:", erroresRaw ? erroresRaw.length : 'N/A');
+      
+      // Convert simbolos dict to JS object
+      if (simbolosRaw && typeof simbolosRaw === 'object') {
+        simbolosActualizados = simbolosRaw.toJs ? simbolosRaw.toJs() : Object.assign({}, simbolosRaw);
+      }
+      
+      // Convert errors list to JS array
+      if (erroresRaw && typeof erroresRaw === 'object') {
+        if (erroresRaw.toJs) {
+          erroresSemanticos = erroresRaw.toJs();
+        } else if (Array.isArray(erroresRaw)) {
+          erroresSemanticos = erroresRaw;
+        } else if (erroresRaw.length !== undefined) {
+          // It's array-like
+          erroresSemanticos = Array.from(erroresRaw);
+        }
+      }
+    } catch (conversionErr) {
+      console.error("Error in Pyodide conversion:", conversionErr);
+      // Fallback: use toJs with simple conversion
+      let parts = resultadoSemantic.toJs();
+      simbolosActualizados = parts[0] || {};
+      erroresSemanticos = parts[1] || [];
+    }
+    
+    console.log("After conversion - Simbolos:", simbolosActualizados);
+    console.log("After conversion - Semantic errors:", erroresSemanticos, "type:", typeof erroresSemanticos, "is array:", Array.isArray(erroresSemanticos));
     if (Array.isArray(erroresSemanticos)) {
       console.log("  Error count:", erroresSemanticos.length);
       erroresSemanticos.forEach((e, i) => console.log(`  Error[${i}]:`, e));
