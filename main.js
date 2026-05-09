@@ -106,6 +106,7 @@ async function analizar(){
     let [simbolosActualizados, erroresSemanticos] = resultadoSemantic.toJs({
       dict_converter: Object.fromEntries
     });
+    console.log("Semantic analysis output:", { simbolosActualizados, erroresSemanticos });
     ultimoSimbolos = simbolosActualizados;
     ultimoErroresSemanticos = erroresSemanticos;
 
@@ -255,11 +256,25 @@ function mostrarErroresSintacticos(errores){
   document.getElementById("sint-error-count").textContent = `${errores.length} errores`;
 }
 
+function normalizeSemanticErrors(errores) {
+  if (!errores) return [];
+  if (Array.isArray(errores)) return errores;
+  if (typeof errores === 'object' && errores !== null && typeof errores.length === 'number') {
+    try {
+      return Array.from(errores);
+    } catch {
+      return [errores];
+    }
+  }
+  return [errores];
+}
+
 function mostrarErroresSemanticos(errores){
   let tabla = document.getElementById("tablaErroresSemanticos");
   tabla.innerHTML="";
 
-  const listaErrores = Array.isArray(errores) ? errores : [errores];
+  const listaErrores = normalizeSemanticErrors(errores);
+  console.log("Semantic errors raw:", errores, "normalized:", listaErrores);
 
   if (listaErrores.length === 0 || (listaErrores.length === 1 && !listaErrores[0])) {
     tabla.innerHTML = '<tr><td class="empty-state success" colspan="3">✓ Sin errores semánticos</td></tr>';
