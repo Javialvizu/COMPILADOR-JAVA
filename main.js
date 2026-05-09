@@ -30,7 +30,7 @@ async function iniciarPyodide(){
     console.log("Pyodide loaded successfully");
 
     updateStatus("Cargando código Python...", false);
-    const response = await fetch("lexer.py");
+    const response = await fetch("lexer.py?v=" + Date.now());
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -81,56 +81,39 @@ async function analizar(){
 
     pyodide.globals.set("codigo", codigo);
 
-    let resultado = pyodide.runPython(`analizador_lexico(codigo)`);
-
-    let [tokens, errores, simbolos] = resultado.toJs({
+    // Usamos una función Python completa para evitar problemas de conversión JS <-> Python
+    let resultadoCompleto = pyodide.runPython(`analizar_todo(codigo)`);
+    let datos = resultadoCompleto.toJs({
       dict_converter: Object.fromEntries
     });
+
+    let tokens = datos.tokens || [];
+    let errores = datos.errores_lexicos || [];
+    let simbolosActualizados = datos.simbolos || {};
+    let ast = datos.ast || null;
+    let erroresSintacticos = datos.errores_sintacticos || [];
+    let erroresSemanticos = normalizeSemanticErrors(datos.errores_semanticos || []);
+
+    console.log("=== RESULTADO COMPLETO ===");
+    console.log("Tokens:", tokens);
+    console.log("Errores léxicos:", errores);
+    console.log("Símbolos:", simbolosActualizados);
+    console.log("AST:", ast);
+    console.log("Errores sintácticos:", erroresSintacticos);
+    console.log("Errores semánticos:", erroresSemanticos);
+
     ultimoTokens = tokens;
     ultimoErrores = errores;
-    ultimoSimbolos = simbolos;
-
-    // Parser
-    pyodide.globals.set("tokens", tokens);
-    let resultadoParser = pyodide.runPython(`analizador_sintactico(tokens)`);
-    let [ast, erroresSintacticos] = resultadoParser.toJs({
-      dict_converter: Object.fromEntries
-    });
+    ultimoSimbolos = simbolosActualizados;
     ultimoAST = ast;
     ultimoErroresSintacticos = erroresSintacticos;
-
-    // Semantic
-    pyodide.globals.set("ast", ast);
-    pyodide.globals.set("simbolos", simbolos);
-    let resultadoSemantic = pyodide.runPython(`analizador_semantico(ast, simbolos)`);
-    console.log("Raw Pyodide result for semantic:", resultadoSemantic);
-    
-    // Simple conversion - let Pyodide handle it automatically
-    let conversionResult = resultadoSemantic.toJs();
-    let simbolosActualizados = conversionResult[0] || {};
-    let erroresSemanticos = conversionResult[1] || [];
-    
-    console.log("After toJs() - simbolosActualizados:", simbolosActualizados);
-    console.log("After toJs() - erroresSemanticos:", erroresSemanticos, "type:", typeof erroresSemanticos);
-    console.log("  Is array:", Array.isArray(erroresSemanticos));
-    console.log("  Length:", erroresSemanticos.length || 'N/A');
-    
-    if (Array.isArray(erroresSemanticos)) {
-      erroresSemanticos.forEach((e, i) => {
-        console.log(`  Error[${i}]:`, e, {code: e.code, description: e.description, line: e.line, column: e.column});
-      });
-    }
-    
-    ultimoSimbolos = simbolosActualizados;
     ultimoErroresSemanticos = erroresSemanticos;
 
     mostrarTokens(tokens);
     mostrarErrores(errores);
     mostrarSimbolos(simbolosActualizados);
     mostrarErroresSintacticos(erroresSintacticos);
-    console.log(">>> Calling mostrarErroresSemanticos with:", erroresSemanticos);
     mostrarErroresSemanticos(erroresSemanticos);
-    console.log(">>> mostrarErroresSemanticos completed");
     mostrarAST(ast);
 
     updateStatus("Análisis completado", true);
@@ -141,15 +124,6 @@ async function analizar(){
     alert("Error al analizar: " + e.message);
   }
 }
-
-function descargarResultado(){
-  ultimoErrores = errores;
-  ultimoSimbolos = simbolos;
-  mostrarTokens(tokens);
-  mostrarErrores(errores);
-  mostrarSimbolos(simbolos);
-}
-
 
 function mostrarTokens(tokens){
   let tabla = document.getElementById("tablaTokens");
@@ -216,8 +190,8 @@ function mostrarSimbolos(simbolos){
     tabla.innerHTML += `
     <tr>
       <td><code style="color: #10b981; font-weight: 600;">${id}</code></td>
-      <td><span style="color: #818cf8;">${data.tipo || 'ID'}</span></td>
-      <td>${data.linea}</td>
+      <td><span style="color: #818cf8;">${data.tipo || data.type || 'ID'}</span></td>
+      <td>${data.linea || data.line || ''}</td>
     </tr>`;
   });
 
@@ -274,14 +248,38 @@ function mostrarErroresSintacticos(errores){
 
 function normalizeSemanticErrors(errores) {
   if (!errores) return [];
-  if (Array.isArray(errores)) return errores;
-  if (typeof errores === 'object' && errores !== null && typeof errores.length === 'number') {
+
+  if (Array.isArray(errores)) {
+    return errores;
+  }
+
+  if (typeof errores.toJs === "function") {
     try {
-      return Array.from(errores);
-    } catch {
-      return [errores];
+      const convertido = errores.toJs({
+        dict_converter: Object.fromEntries
+      });
+      return normalizeSemanticErrors(convertido);
+    } catch (e) {
+      console.warn("No se pudo convertir errores semánticos con toJs:", e);
     }
   }
+
+  if (typeof errores === "object" && errores !== null) {
+    try {
+      if (typeof errores[Symbol.iterator] === "function") {
+        return Array.from(errores);
+      }
+    } catch (e) {
+      console.warn("No se pudo convertir errores semánticos iterables:", e);
+    }
+
+    if (errores.code || errores.description || errores.message) {
+      return [errores];
+    }
+
+    return Object.values(errores);
+  }
+
   return [errores];
 }
 
@@ -476,8 +474,6 @@ function descargarResultado(){
 
   URL.revokeObjectURL(url);
 }
-
-
 
 /* ==================== EXPORT FUNCTIONS ==================== */
 
@@ -738,10 +734,17 @@ style.textContent = `
   }
 `;
 document.head.appendChild(style);
-// Asignar funciones globales
+
+// Asignar funciones globales al final, cuando todas ya existen
 window.analizar = analizar;
 window.descargarResultado = descargarResultado;
 window.toggle = toggle;
 window.showTab = showTab;
-window.exportarASTImagen = exportarASTImagen;
-window.exportarASTPDF = exportarASTPDF;
+
+if (typeof exportarASTImagen === "function") {
+  window.exportarASTImagen = exportarASTImagen;
+}
+
+if (typeof exportarASTPDF === "function") {
+  window.exportarASTPDF = exportarASTPDF;
+}
