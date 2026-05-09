@@ -125,7 +125,13 @@ class Parser:
             var_type = self.consume("KEYWORD")[1]
             name_token = self.consume("IDENTIFICADOR")
             self.consume("SIMBOLO", ";")
-            return {"type": "VariableDeclaration", "var_type": var_type, "name": name_token[1]}
+            return {
+                "type": "VariableDeclaration",
+                "var_type": var_type,
+                "name": name_token[1],
+                "line": name_token[2],
+                "column": name_token[3]
+            }
         elif token and token[1] == "public":
             return self.parse_method_declaration()
         return None
@@ -149,7 +155,13 @@ class Parser:
         if iter_count >= max_iter:
             self.errors.append("SYN-003: Posible bucle infinito en statements del método")
         self.consume("SIMBOLO", "}")
-        return {"type": "MethodDeclaration", "name": name_token[1], "statements": statements}
+        return {
+            "type": "MethodDeclaration",
+            "name": name_token[1],
+            "statements": statements,
+            "line": name_token[2],
+            "column": name_token[3]
+        }
 
     def parse_statement(self):
         token = self.current_token()
@@ -159,26 +171,50 @@ class Parser:
             self.consume("OPERADOR", "=")
             expr = self.parse_expression()
             self.consume("SIMBOLO", ";")
-            return {"type": "VariableDeclaration", "var_type": var_type, "name": name_token[1], "init": expr}
+            return {
+                "type": "VariableDeclaration",
+                "var_type": var_type,
+                "name": name_token[1],
+                "init": expr,
+                "line": name_token[2],
+                "column": name_token[3]
+            }
         elif token and token[0] == "IDENTIFICADOR":
-            name = self.consume("IDENTIFICADOR")[1]
+            name_token = self.consume("IDENTIFICADOR")
             self.consume("OPERADOR", "=")
             expr = self.parse_expression()
             self.consume("SIMBOLO", ";")
-            return {"type": "Assignment", "name": name, "expr": expr}
+            return {
+                "type": "Assignment",
+                "name": name_token[1],
+                "expr": expr,
+                "line": name_token[2],
+                "column": name_token[3]
+            }
         elif token and token[1] == "if":
             return self.parse_if_statement()
         elif token and token[1] == "while":
             return self.parse_while_statement()
         elif token and token[1] == "return":
-            self.consume("KEYWORD", "return")
-            expr = self.parse_expression()
-            self.consume("SIMBOLO", ";")
-            return {"type": "ReturnStatement", "expr": expr}
+            return {
+                "type": "ReturnStatement",
+                "expr": self.parse_return_statement()
+            }
         return None
 
+    def parse_return_statement(self):
+        return_token = self.consume("KEYWORD", "return")
+        expr = self.parse_expression()
+        self.consume("SIMBOLO", ";")
+        return {
+            "type": "ReturnStatement",
+            "expr": expr,
+            "line": return_token[2],
+            "column": return_token[3]
+        }
+
     def parse_if_statement(self):
-        self.consume("KEYWORD", "if")
+        if_token = self.consume("KEYWORD", "if")
         self.consume("SIMBOLO", "(")
         condition = self.parse_expression()
         self.consume("SIMBOLO", ")")
@@ -207,10 +243,17 @@ class Parser:
             if iter_count >= max_iter:
                 self.errors.append("SYN-003: Posible bucle infinito en else statements")
             self.consume("SIMBOLO", "}")
-        return {"type": "IfStatement", "condition": condition, "then_stmts": then_stmts, "else_stmts": else_stmts}
+        return {
+            "type": "IfStatement",
+            "condition": condition,
+            "then_stmts": then_stmts,
+            "else_stmts": else_stmts,
+            "line": if_token[2],
+            "column": if_token[3]
+        }
 
     def parse_while_statement(self):
-        self.consume("KEYWORD", "while")
+        while_token = self.consume("KEYWORD", "while")
         self.consume("SIMBOLO", "(")
         condition = self.parse_expression()
         self.consume("SIMBOLO", ")")
@@ -226,7 +269,13 @@ class Parser:
         if iter_count >= max_iter:
             self.errors.append("SYN-003: Posible bucle infinito en while statements")
         self.consume("SIMBOLO", "}")
-        return {"type": "WhileStatement", "condition": condition, "stmts": stmts}
+        return {
+            "type": "WhileStatement",
+            "condition": condition,
+            "stmts": stmts,
+            "line": while_token[2],
+            "column": while_token[3]
+        }
 
     def parse_expression(self):
         return self.parse_comparison()
@@ -259,13 +308,13 @@ class Parser:
         token = self.current_token()
         if token and token[0] == "IDENTIFICADOR":
             self.consume("IDENTIFICADOR")
-            return {"type": "Identifier", "name": token[1]}
+            return {"type": "Identifier", "name": token[1], "line": token[2], "column": token[3]}
         elif token and token[0] == "NUMERO":
             self.consume("NUMERO")
-            return {"type": "Number", "value": token[1]}
+            return {"type": "Number", "value": token[1], "line": token[2], "column": token[3]}
         elif token and token[0] == "STRING":
             self.consume("STRING")
-            return {"type": "String", "value": token[1]}
+            return {"type": "String", "value": token[1], "line": token[2], "column": token[3]}
         elif token and token[1] == "(":
             self.consume("SIMBOLO", "(")
             expr = self.parse_expression()
@@ -291,12 +340,20 @@ class SemanticAnalyzer:
     def exit_scope(self):
         self.scope_stack.pop()
 
-    def declare_variable(self, name, var_type, line):
+    def format_error(self, code, message, line=None, column=None):
+        return {
+            "code": code,
+            "description": message,
+            "line": line if line is not None else "",
+            "column": column if column is not None else ""
+        }
+
+    def declare_variable(self, name, var_type, line, column=None):
         current_scope = self.scope_stack[-1]
         if name in current_scope:
-            self.errors.append(f"SEM-001: Error semántico: variable '{name}' ya declarada - línea {line}")
+            self.errors.append(self.format_error("SEM-001", f"Error semántico: variable '{name}' ya declarada", line, column))
         else:
-            current_scope[name] = {"type": var_type, "line": line}
+            current_scope[name] = {"type": var_type, "line": line, "column": column}
 
     def lookup_variable(self, name):
         for scope in reversed(self.scope_stack):
@@ -314,7 +371,7 @@ class SemanticAnalyzer:
         for decl in class_decl.get("declarations", []):
             if isinstance(decl, dict):
                 if decl.get("type") == "VariableDeclaration":
-                    self.declare_variable(decl["name"], decl["var_type"], 0)
+                    self.declare_variable(decl["name"], decl["var_type"], decl.get("line", 1), decl.get("column", ""))
                 elif decl.get("type") == "MethodDeclaration":
                     self.enter_scope()
                     self.analyze_method_declaration(decl)
@@ -329,20 +386,23 @@ class SemanticAnalyzer:
     def analyze_statement(self, stmt):
         if not stmt or not isinstance(stmt, dict):
             return
+        line = stmt.get("line", 1)
+        column = stmt.get("column", "")
+
         if stmt.get("type") == "VariableDeclaration":
-            self.declare_variable(stmt["name"], stmt["var_type"], 0)
+            self.declare_variable(stmt["name"], stmt["var_type"], line, column)
             if "init" in stmt:
                 expr_type = self.analyze_expression(stmt["init"])
                 if expr_type and expr_type != stmt["var_type"]:
-                    self.errors.append(f"SEM-003: Error semántico: tipo incompatible en inicialización para '{stmt['name']}' - línea 1")
+                    self.errors.append(self.format_error("SEM-003", f"Error semántico: tipo incompatible en inicialización para '{stmt['name']}'", line, column))
         elif stmt.get("type") == "Assignment":
             var_info = self.lookup_variable(stmt["name"])
             if not var_info:
-                self.errors.append(f"SEM-002: Error semántico: variable '{stmt['name']}' no declarada - línea 1")
+                self.errors.append(self.format_error("SEM-002", f"Error semántico: variable '{stmt['name']}' no declarada", line, column))
             else:
                 expr_type = self.analyze_expression(stmt["expr"])
                 if expr_type and expr_type != var_info["type"]:
-                    self.errors.append(f"SEM-003: Error semántico: tipo incompatible en asignación para '{stmt['name']}' - línea 1")
+                    self.errors.append(self.format_error("SEM-003", f"Error semántico: tipo incompatible en asignación para '{stmt['name']}'", line, column))
         elif stmt.get("type") == "IfStatement":
             self.analyze_expression(stmt["condition"])
             self.enter_scope()
@@ -369,7 +429,7 @@ class SemanticAnalyzer:
         if expr.get("type") == "Identifier":
             var_info = self.lookup_variable(expr["name"])
             if not var_info:
-                self.errors.append(f"SEM-002: Error semántico: variable '{expr['name']}' no declarada")
+                self.errors.append(self.format_error("SEM-002", f"Error semántico: variable '{expr['name']}' no declarada", expr.get("line", 1), expr.get("column", "")))
                 return None
             return var_info["type"]
         elif expr.get("type") == "Number":
@@ -386,10 +446,10 @@ class SemanticAnalyzer:
                 elif op in [">", "<", ">=", "<=", "==", "!="]:
                     return "boolean"
                 else:
-                    self.errors.append("SEM-005: Operador no soportado - línea 1")
+                    self.errors.append(self.format_error("SEM-005", "Operador no soportado", expr.get("line", 1), expr.get("column", "")))
                     return None
             else:
-                self.errors.append("SEM-004: Error semántico: tipos incompatibles en operación - línea 1")
+                self.errors.append(self.format_error("SEM-004", "Error semántico: tipos incompatibles en operación", expr.get("line", 1), expr.get("column", "")))
                 return None
         return None
 
@@ -401,8 +461,14 @@ def analizador_semantico(ast, symbol_table):
         return analyzer.symbol_table, analyzer.errors
     except Exception as e:
         import traceback
-        error_msg = f"Error en análisis semántico: {str(e)}\n{traceback.format_exc()}"
-        return symbol_table, [error_msg]
+        error_msg = f"Error en análisis semántico: {str(e)}"
+        error_detail = {
+            "code": "SEM-000",
+            "description": error_msg,
+            "line": "",
+            "column": ""
+        }
+        return symbol_table, [error_detail]
 
 def analizador_lexico(codigo):
 

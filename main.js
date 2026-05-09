@@ -209,6 +209,15 @@ function mostrarSimbolos(simbolos){
 
 function parseErrorDetail(error) {
   if (!error) return { description: '', line: '', column: '' };
+
+  if (typeof error === 'object' && error !== null && !Array.isArray(error)) {
+    return {
+      description: error.description || error.message || JSON.stringify(error),
+      line: error.line || '',
+      column: error.column || error.columna || ''
+    };
+  }
+
   if (Array.isArray(error) && error.length >= 4) {
     return { description: error[0], line: error[2], column: error[3] };
   }
