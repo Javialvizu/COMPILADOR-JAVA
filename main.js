@@ -103,10 +103,18 @@ async function analizar(){
     pyodide.globals.set("ast", ast);
     pyodide.globals.set("simbolos", simbolos);
     let resultadoSemantic = pyodide.runPython(`analizador_semantico(ast, simbolos)`);
+    console.log("Raw Pyodide result for semantic:", resultadoSemantic, "type:", typeof resultadoSemantic);
+    
     let [simbolosActualizados, erroresSemanticos] = resultadoSemantic.toJs({
-      dict_converter: Object.fromEntries
+      dict_converter: (d) => Object.assign({}, ...Array.from(d.items()).map(([k, v]) => ({[k]: v})))
     });
-    console.log("Semantic analysis output:", { simbolosActualizados, erroresSemanticos });
+    console.log("After toJs conversion - Simbolos:", simbolosActualizados);
+    console.log("After toJs conversion - Semantic errors:", erroresSemanticos, "type:", typeof erroresSemanticos, "is array:", Array.isArray(erroresSemanticos));
+    if (Array.isArray(erroresSemanticos)) {
+      console.log("  Error count:", erroresSemanticos.length);
+      erroresSemanticos.forEach((e, i) => console.log(`  Error[${i}]:`, e));
+    }
+    
     ultimoSimbolos = simbolosActualizados;
     ultimoErroresSemanticos = erroresSemanticos;
 
@@ -114,6 +122,7 @@ async function analizar(){
     mostrarErrores(errores);
     mostrarSimbolos(simbolosActualizados);
     mostrarErroresSintacticos(erroresSintacticos);
+    console.log("About to call mostrarErroresSemanticos with:", erroresSemanticos);
     mostrarErroresSemanticos(erroresSemanticos);
     mostrarAST(ast);
 
@@ -274,27 +283,55 @@ function mostrarErroresSemanticos(errores){
   tabla.innerHTML="";
 
   const listaErrores = normalizeSemanticErrors(errores);
-  console.log("Semantic errors raw:", errores, "normalized:", listaErrores);
+  console.log("=== SEMANTIC ERRORS DEBUG ===");
+  console.log("Semantic errors raw type:", typeof errores, "value:", errores);
+  console.log("Semantic errors normalized:", listaErrores);
+  console.log("List length:", listaErrores.length);
 
-  if (listaErrores.length === 0 || (listaErrores.length === 1 && !listaErrores[0])) {
+  if (listaErrores.length === 0) {
     tabla.innerHTML = '<tr><td class="empty-state success" colspan="3">✓ Sin errores semánticos</td></tr>';
     document.getElementById("sem-error-count").textContent = "0 errores";
+    console.log("No semantic errors found");
     return;
   }
 
-  console.log("Errores semánticos detectados:", listaErrores);
+  console.log("Errores semánticos detectados:", listaErrores.length);
 
-  listaErrores.forEach(e=>{
-    const detalle = parseErrorDetail(e);
+  let rowCount = 0;
+  listaErrores.forEach((e, idx)=>{
+    console.log(`Processing error ${idx}:`, e, "type:", typeof e);
+    
+    let description = '';
+    let line = '';
+    let column = '';
+    
+    if (e && typeof e === 'object') {
+      if (e.code && e.description) {
+        // Dictionary format from Python
+        description = `[${e.code}] ${e.description}`;
+        line = e.line || '';
+        column = e.column || '';
+      } else {
+        description = JSON.stringify(e);
+      }
+    } else {
+      description = String(e);
+    }
+    
+    console.log(`  -> Rendering as: "${description}", line=${line}, col=${column}`);
+    
     tabla.innerHTML += `
     <tr>
-      <td><span style="color: #fca5a5;">${detalle.description}</span></td>
-      <td>${detalle.line}</td>
-      <td>${detalle.column}</td>
+      <td><span style="color: #fca5a5;">${description}</span></td>
+      <td>${line}</td>
+      <td>${column}</td>
     </tr>`;
+    rowCount++;
   });
 
-  document.getElementById("sem-error-count").textContent = `${listaErrores.length} errores`;
+  console.log("Total rows rendered:", rowCount);
+  document.getElementById("sem-error-count").textContent = `${rowCount} errores`;
+  console.log("=== END SEMANTIC ERRORS DEBUG ===");
 }
 
 function mostrarAST(ast){
