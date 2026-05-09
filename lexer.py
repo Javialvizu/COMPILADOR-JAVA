@@ -52,6 +52,7 @@ Expresiones regulares para tokens:
 KEYWORDS = {
     "class","public","static","void","int","double","String",
     "if","else","for","while","return","new","boolean","char",
+    "import"
 }
 
 OPERADORES_DOBLES = {"==","!=","<=",">=","++","--","+=","-=","*=","/="}
@@ -95,10 +96,34 @@ class Parser:
         return None
 
     def parse_program(self):
+        imports = []
+        while self.current_token() and self.current_token()[0] == "KEYWORD" and self.current_token()[1] == "import":
+            imp = self.parse_import_declaration()
+            if imp:
+                imports.append(imp)
         class_decl = self.parse_class_declaration()
         if not class_decl:
             return None
-        return {"type": "Program", "class_decl": class_decl}
+        return {"type": "Program", "imports": imports, "class_decl": class_decl}
+
+    def parse_import_declaration(self):
+        self.consume("KEYWORD", "import")
+        path = self.parse_qualified_name()
+        self.consume("SIMBOLO", ";")
+        return {"type": "ImportDeclaration", "path": path}
+
+    def parse_qualified_name(self):
+        name_token = self.consume("IDENTIFICADOR")
+        if not name_token:
+            return None
+        name = name_token[1]
+        while self.current_token() and self.current_token()[1] == ".":
+            self.consume("SIMBOLO", ".")
+            part_token = self.consume("IDENTIFICADOR")
+            if not part_token:
+                break
+            name += "." + part_token[1]
+        return name
 
     def parse_class_declaration(self):
         token = self.current_token()
@@ -122,10 +147,39 @@ class Parser:
         self.consume("SIMBOLO", "}")
         return {"type": "ClassDeclaration", "name": name_token[1], "declarations": declarations}
 
-    def parse_declaration(self):
+    def parse_type(self):
         token = self.current_token()
-        if token and token[0] == "KEYWORD" and token[1] in ["int", "double", "String", "boolean"]:
-            var_type = self.consume("KEYWORD")[1]
+        if token and ((token[0] == "KEYWORD" and token[1] in ["int", "double", "String", "boolean"]) or token[0] == "IDENTIFICADOR"):
+            type_name = self.consume(token[0], token[1])[1]
+            if self.current_token() and self.current_token()[1] == "[":
+                self.consume("SIMBOLO", "[")
+                self.consume("SIMBOLO", "]")
+                type_name += "[]"
+            return type_name
+        return None
+
+    def parse_parameter_list(self):
+        params = []
+        if self.current_token() and self.current_token()[1] != ")":
+            while True:
+                param_type = self.parse_type()
+                param_name_token = self.consume("IDENTIFICADOR")
+                params.append({
+                    "name": param_name_token[1],
+                    "type": param_type,
+                    "line": param_name_token[2],
+                    "column": param_name_token[3]
+                })
+                if self.current_token() and self.current_token()[1] == ",":
+                    self.consume("SIMBOLO", ",")
+                    continue
+                break
+        return params
+
+    def parse_declaration(self):
+        start_pos = self.pos
+        var_type = self.parse_type()
+        if var_type and self.current_token() and self.current_token()[0] == "IDENTIFICADOR":
             name_token = self.consume("IDENTIFICADOR")
             self.consume("SIMBOLO", ";")
             return {
@@ -135,7 +189,9 @@ class Parser:
                 "line": name_token[2],
                 "column": name_token[3]
             }
-        elif token and token[1] == "public":
+        self.pos = start_pos
+        token = self.current_token()
+        if token and token[1] == "public":
             return self.parse_method_declaration()
         return None
 
@@ -145,6 +201,7 @@ class Parser:
         self.consume("KEYWORD", "void")
         name_token = self.consume("IDENTIFICADOR")
         self.consume("SIMBOLO", "(")
+        params = self.parse_parameter_list()
         self.consume("SIMBOLO", ")")
         self.consume("SIMBOLO", "{")
         statements = []
@@ -161,38 +218,59 @@ class Parser:
         return {
             "type": "MethodDeclaration",
             "name": name_token[1],
+            "params": params,
             "statements": statements,
             "line": name_token[2],
             "column": name_token[3]
         }
 
     def parse_statement(self):
+        start_pos = self.pos
+        var_type = self.parse_type()
+        if var_type:
+            if self.current_token() and self.current_token()[0] == "IDENTIFICADOR":
+                name_token = self.consume("IDENTIFICADOR")
+                if self.current_token() and self.current_token()[1] == "=":
+                    self.consume("OPERADOR", "=")
+                    expr = self.parse_expression()
+                    self.consume("SIMBOLO", ";")
+                    return {
+                        "type": "VariableDeclaration",
+                        "var_type": var_type,
+                        "name": name_token[1],
+                        "init": expr,
+                        "line": name_token[2],
+                        "column": name_token[3]
+                    }
+            self.pos = start_pos
         token = self.current_token()
-        if token and token[0] == "KEYWORD" and token[1] in ["int", "double", "String", "boolean"]:
-            var_type = self.consume("KEYWORD")[1]
-            name_token = self.consume("IDENTIFICADOR")
-            self.consume("OPERADOR", "=")
+        if token and token[0] == "IDENTIFICADOR":
             expr = self.parse_expression()
+            if self.current_token() and self.current_token()[1] == "=":
+                self.consume("OPERADOR", "=")
+                right = self.parse_expression()
+                self.consume("SIMBOLO", ";")
+                if expr.get("type") == "Identifier":
+                    return {
+                        "type": "Assignment",
+                        "name": expr["name"],
+                        "expr": right,
+                        "line": expr.get("line", 1),
+                        "column": expr.get("column", "")
+                    }
+                return {
+                    "type": "Assignment",
+                    "name": None,
+                    "expr": right,
+                    "line": expr.get("line", 1),
+                    "column": expr.get("column", "")
+                }
             self.consume("SIMBOLO", ";")
             return {
-                "type": "VariableDeclaration",
-                "var_type": var_type,
-                "name": name_token[1],
-                "init": expr,
-                "line": name_token[2],
-                "column": name_token[3]
-            }
-        elif token and token[0] == "IDENTIFICADOR":
-            name_token = self.consume("IDENTIFICADOR")
-            self.consume("OPERADOR", "=")
-            expr = self.parse_expression()
-            self.consume("SIMBOLO", ";")
-            return {
-                "type": "Assignment",
-                "name": name_token[1],
+                "type": "ExpressionStatement",
                 "expr": expr,
-                "line": name_token[2],
-                "column": name_token[3]
+                "line": expr.get("line", 1),
+                "column": expr.get("column", "")
             }
         elif token and token[1] == "if":
             return self.parse_if_statement()
@@ -309,21 +387,62 @@ class Parser:
 
     def parse_factor(self):
         token = self.current_token()
-        if token and token[0] == "IDENTIFICADOR":
+        node = None
+        if token and token[0] == "KEYWORD" and token[1] == "new":
+            self.consume("KEYWORD", "new")
+            class_token = self.consume("IDENTIFICADOR")
+            self.consume("SIMBOLO", "(")
+            args = []
+            if self.current_token() and self.current_token()[1] != ")":
+                args.append(self.parse_expression())
+                while self.current_token() and self.current_token()[1] == ",":
+                    self.consume("SIMBOLO", ",")
+                    args.append(self.parse_expression())
+            self.consume("SIMBOLO", ")")
+            node = {"type": "NewExpression", "class": class_token[1], "args": args, "line": class_token[2], "column": class_token[3]}
+        elif token and token[0] == "IDENTIFICADOR":
             self.consume("IDENTIFICADOR")
-            return {"type": "Identifier", "name": token[1], "line": token[2], "column": token[3]}
+            node = {"type": "Identifier", "name": token[1], "line": token[2], "column": token[3]}
+            if self.current_token() and self.current_token()[1] == "(":
+                self.consume("SIMBOLO", "(")
+                args = []
+                if self.current_token() and self.current_token()[1] != ")":
+                    args.append(self.parse_expression())
+                    while self.current_token() and self.current_token()[1] == ",":
+                        self.consume("SIMBOLO", ",")
+                        args.append(self.parse_expression())
+                self.consume("SIMBOLO", ")")
+                node = {"type": "MethodCall", "receiver": None, "method": token[1], "args": args, "line": token[2], "column": token[3]}
         elif token and token[0] == "NUMERO":
             self.consume("NUMERO")
-            return {"type": "Number", "value": token[1], "line": token[2], "column": token[3]}
+            node = {"type": "Number", "value": token[1], "line": token[2], "column": token[3]}
         elif token and token[0] == "STRING":
             self.consume("STRING")
-            return {"type": "String", "value": token[1], "line": token[2], "column": token[3]}
+            node = {"type": "String", "value": token[1], "line": token[2], "column": token[3]}
         elif token and token[1] == "(":
             self.consume("SIMBOLO", "(")
-            expr = self.parse_expression()
+            node = self.parse_expression()
             self.consume("SIMBOLO", ")")
-            return expr
-        return None
+        else:
+            return None
+
+        while self.current_token() and self.current_token()[1] == ".":
+            self.consume("SIMBOLO", ".")
+            member_token = self.consume("IDENTIFICADOR")
+            if self.current_token() and self.current_token()[1] == "(":
+                self.consume("SIMBOLO", "(")
+                args = []
+                if self.current_token() and self.current_token()[1] != ")":
+                    args.append(self.parse_expression())
+                    while self.current_token() and self.current_token()[1] == ",":
+                        self.consume("SIMBOLO", ",")
+                        args.append(self.parse_expression())
+                self.consume("SIMBOLO", ")")
+                node = {"type": "MethodCall", "receiver": node, "method": member_token[1], "args": args, "line": member_token[2], "column": member_token[3]}
+            else:
+                node = {"type": "FieldAccess", "receiver": node, "field": member_token[1], "line": member_token[2], "column": member_token[3]}
+
+        return node
 
 def analizador_sintactico(tokens):
     parser = Parser(tokens)
@@ -376,15 +495,17 @@ class SemanticAnalyzer:
                 if decl.get("type") == "VariableDeclaration":
                     self.declare_variable(decl["name"], decl["var_type"], decl.get("line", 1), decl.get("column", ""))
                 elif decl.get("type") == "MethodDeclaration":
-                    self.enter_scope()
                     self.analyze_method_declaration(decl)
-                    self.exit_scope()
 
     def analyze_method_declaration(self, method_decl):
         if not method_decl or not isinstance(method_decl, dict):
             return
+        self.enter_scope()
+        for param in method_decl.get("params", []):
+            self.declare_variable(param["name"], param["type"], param.get("line", 1), param.get("column", ""))
         for stmt in method_decl.get("statements", []):
             self.analyze_statement(stmt)
+        self.exit_scope()
 
     def analyze_statement(self, stmt):
         if not stmt or not isinstance(stmt, dict):
@@ -399,13 +520,18 @@ class SemanticAnalyzer:
                 if expr_type and expr_type != stmt["var_type"]:
                     self.errors.append(self.format_error("SEM-003", f"Error semántico: tipo incompatible en inicialización para '{stmt['name']}'", line, column))
         elif stmt.get("type") == "Assignment":
-            var_info = self.lookup_variable(stmt["name"])
-            if not var_info:
-                self.errors.append(self.format_error("SEM-002", f"Error semántico: variable '{stmt['name']}' no declarada", line, column))
+            if stmt["name"]:
+                var_info = self.lookup_variable(stmt["name"])
+                if not var_info:
+                    self.errors.append(self.format_error("SEM-002", f"Error semántico: variable '{stmt['name']}' no declarada", line, column))
+                else:
+                    expr_type = self.analyze_expression(stmt["expr"])
+                    if expr_type and expr_type != var_info["type"]:
+                        self.errors.append(self.format_error("SEM-003", f"Error semántico: tipo incompatible en asignación para '{stmt['name']}'", line, column))
             else:
-                expr_type = self.analyze_expression(stmt["expr"])
-                if expr_type and expr_type != var_info["type"]:
-                    self.errors.append(self.format_error("SEM-003", f"Error semántico: tipo incompatible en asignación para '{stmt['name']}'", line, column))
+                self.analyze_expression(stmt["expr"])
+        elif stmt.get("type") == "ExpressionStatement":
+            self.analyze_expression(stmt["expr"])
         elif stmt.get("type") == "IfStatement":
             self.analyze_expression(stmt["condition"])
             self.enter_scope()
@@ -429,20 +555,50 @@ class SemanticAnalyzer:
     def analyze_expression(self, expr):
         if not expr or not isinstance(expr, dict):
             return None
-        if expr.get("type") == "Identifier":
+        expr_type = expr.get("type")
+        if expr_type == "Identifier":
             var_info = self.lookup_variable(expr["name"])
             if not var_info:
+                if expr["name"] in ["System", "Math", "Random"]:
+                    return expr["name"]
                 self.errors.append(self.format_error("SEM-002", f"Error semántico: variable '{expr['name']}' no declarada", expr.get("line", 1), expr.get("column", "")))
                 return None
             return var_info["type"]
-        elif expr.get("type") == "Number":
+        elif expr_type == "Number":
             return "int"
-        elif expr.get("type") == "String":
+        elif expr_type == "String":
             return "String"
-        elif expr.get("type") == "BinaryOp":
+        elif expr_type == "FieldAccess":
+            receiver_type = self.analyze_expression(expr["receiver"])
+            if receiver_type == "System" and expr["field"] == "out":
+                return "PrintStream"
+            return None
+        elif expr_type == "NewExpression":
+            return expr.get("class")
+        elif expr_type == "MethodCall":
+            receiver = expr.get("receiver")
+            method = expr.get("method")
+            args = expr.get("args", [])
+            if receiver:
+                receiver_type = self.analyze_expression(receiver)
+                if receiver_type == "Random" and method == "nextInt":
+                    if len(args) == 1 and self.analyze_expression(args[0]) == "int":
+                        return "int"
+                    self.errors.append(self.format_error("SEM-005", f"Error semántico: argumentos inválidos para {method}", expr.get("line", 1), expr.get("column", "")))
+                    return None
+                if receiver_type == "PrintStream" and method == "println":
+                    if len(args) == 1:
+                        self.analyze_expression(args[0])
+                    return "void"
+                return None
+            else:
+                return None
+        elif expr_type == "BinaryOp":
             left_type = self.analyze_expression(expr["left"])
             right_type = self.analyze_expression(expr["right"])
             op = expr["op"]
+            if op == "+" and (left_type == "String" or right_type == "String"):
+                return "String"
             if left_type == right_type == "int":
                 if op in ["+", "-", "*", "/"]:
                     return "int"
@@ -451,9 +607,10 @@ class SemanticAnalyzer:
                 else:
                     self.errors.append(self.format_error("SEM-005", "Operador no soportado", expr.get("line", 1), expr.get("column", "")))
                     return None
-            else:
-                self.errors.append(self.format_error("SEM-004", "Error semántico: tipos incompatibles en operación", expr.get("line", 1), expr.get("column", "")))
-                return None
+            if left_type == right_type and op in ["==", "!="]:
+                return "boolean"
+            self.errors.append(self.format_error("SEM-004", "Error semántico: tipos incompatibles en operación", expr.get("line", 1), expr.get("column", "")))
+            return None
         return None
 
 def analizador_semantico(ast, symbol_table):
