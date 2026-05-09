@@ -272,6 +272,19 @@ function mostrarErroresSintacticos(errores){
   document.getElementById("sint-error-count").textContent = `${errores.length} errores`;
 }
 
+function normalizeSemanticErrors(errores) {
+  if (!errores) return [];
+  if (Array.isArray(errores)) return errores;
+  if (typeof errores === 'object' && errores !== null && typeof errores.length === 'number') {
+    try {
+      return Array.from(errores);
+    } catch {
+      return [errores];
+    }
+  }
+  return [errores];
+}
+
 function mostrarErroresSemanticos(errores){
   let tabla = document.getElementById("tablaErroresSemanticos");
   tabla.innerHTML="";
