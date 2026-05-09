@@ -1,18 +1,208 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
-    <meta charset="UTF-8"> 
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Analizador Lexico Java</title> 
-    <style>
-        body {
-            font-family: Arial, sans-serif; 
-            margin: 0;
-            padding: 20px;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Compilador Java Completo</title>
+<base href="/COMPILADOR-JAVA/">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.2/full/pyodide.js"></script>
+<!-- Export Libraries -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
+
 <body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-content">
+    <div class="header-title">
+      <i class="fas fa-coffee"></i>
+      <h1>Compilador Java</h1>
+      <span class="subtitle">Análisis Léxico, Sintáctico y Semántico</span>
+    </div>
+    <div class="header-status">
+      <span id="status-indicator" class="status-dot loading"></span>
+      <span id="status-text">Cargando...</span>
+    </div>
+  </div>
+</div>
+
+<!-- Main Content -->
+<div class="container">
+  
+  <!-- Editor Section -->
+  <div class="editor-section">
+    <div class="section-header">
+      <h2><i class="fas fa-code"></i> Editor de Código</h2>
+    </div>
+    <textarea id="editor" class="code-editor" placeholder="Escribe código Java aquí...&#10;&#10;Ejemplo:&#10;class MiPrograma {&#10;    public static void main() {&#10;        int x = 10;&#10;    }&#10;}"></textarea>
+    
+    <div class="editor-controls">
+      <div class="button-group">
+        <label for="fileInput" class="file-label">
+          <i class="fas fa-folder-open"></i> Cargar Archivo
+        </label>
+        <input type="file" id="fileInput" accept=".java,.txt" class="hidden-input">
+        
+        <button class="btn btn-primary" onclick="analizar()">
+          <i class="fas fa-play"></i> Analizar Código
+        </button>
+      </div>
+      
+      <button class="btn btn-secondary" onclick="descargarResultado()">
+        <i class="fas fa-download"></i> Descargar Resultado
+      </button>
+    </div>
+  </div>
+
+  <!-- Output Section -->
+  <div class="output-section">
+    <div class="section-header">
+      <h2><i class="fas fa-terminal"></i> Resultados del Análisis</h2>
+    </div>
+
+    <!-- Tabs Navigation -->
+    <div class="tabs-nav">
+      <button class="tab-button active" onclick="showTab('tokens')">
+        <i class="fas fa-tag"></i> Tokens
+      </button>
+      <button class="tab-button" onclick="showTab('simbolos')">
+        <i class="fas fa-list"></i> Símbolos
+      </button>
+      <button class="tab-button" onclick="showTab('errores-lex')">
+        <i class="fas fa-exclamation-circle"></i> Lexicos
+      </button>
+      <button class="tab-button" onclick="showTab('errores-sint')">
+        <i class="fas fa-exclamation-triangle"></i> Sint
+      </button>
+      <button class="tab-button" onclick="showTab('ast')">
+        <i class="fas fa-sitemap"></i> AST
+      </button>
+      <button class="tab-button" onclick="showTab('errores-sem')">
+        <i class="fas fa-bug"></i> Sem
+      </button>
+    </div>
+
+    <!-- Tab Content -->
+    <div class="tabs-content">
+      
+      <!-- Tokens Tab -->
+      <div id="tokens-tab" class="tab-panel active">
+        <div class="panel-header">
+          <h3><i class="fas fa-tag"></i> Análisis de Tokens</h3>
+          <span class="token-count" id="token-count">0 tokens</span>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr><th>#</th><th>Tipo de Token</th><th>Lexema</th><th>Línea</th><th>Columna</th></tr>
+            </thead>
+            <tbody id="tablaTokens">
+              <tr><td colspan="5" class="empty-state">Ejecuta el análisis para ver los tokens</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tabla de Símbolos Tab -->
+      <div id="simbolos-tab" class="tab-panel">
+        <div class="panel-header">
+          <h3><i class="fas fa-list"></i> Tabla de Símbolos</h3>
+          <span class="symbol-count" id="symbol-count">0 símbolos</span>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr><th>Identificador</th><th>Tipo</th><th>Línea</th></tr>
+            </thead>
+            <tbody id="tablaSimbolos">
+              <tr><td colspan="3" class="empty-state">Sin símbolos identificados</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Errores Léxicos Tab -->
+      <div id="errores-lex-tab" class="tab-panel">
+        <div class="panel-header">
+          <h3><i class="fas fa-exclamation-circle"></i> Errores Léxicos</h3>
+          <span class="error-count" id="lex-error-count">0 errores</span>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr><th>Tipo</th><th>Carácter</th><th>Línea</th><th>Columna</th></tr>
+            </thead>
+            <tbody id="tablaErrores">
+              <tr><td colspan="4" class="empty-state success">✓ Sin errores léxicos</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Errores Sintácticos Tab -->
+      <div id="errores-sint-tab" class="tab-panel">
+        <div class="panel-header">
+          <h3><i class="fas fa-exclamation-triangle"></i> Errores Sintácticos</h3>
+          <span class="error-count" id="sint-error-count">0 errores</span>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr><th>Descripción del Error</th><th>Línea</th><th>Columna</th></tr>
+            </thead>
+            <tbody id="tablaErroresSintacticos">
+              <tr><td class="empty-state success" colspan="3">✓ Sin errores sintácticos</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- AST Tab -->
+      <div id="ast-tab" class="tab-panel">
+        <div class="panel-header">
+          <h3><i class="fas fa-sitemap"></i> Árbol de Sintaxis Abstracta (AST)</h3>
+          <div class="ast-export-buttons">
+            <button class="btn-export btn-export-png" onclick="exportarASTImagen()" title="Descargar como PNG">
+              <i class="fas fa-image"></i> PNG
+            </button>
+            <button class="btn-export btn-export-pdf" onclick="exportarASTPDF()" title="Descargar como PDF">
+              <i class="fas fa-file-pdf"></i> PDF
+            </button>
+          </div>
+        </div>
+        <div id="astDisplay" class="ast-container">
+          <div class="empty-state">Ejecuta el análisis para ver el AST</div>
+        </div>
+      </div>
+
+      <!-- Errores Semánticos Tab -->
+      <div id="errores-sem-tab" class="tab-panel">
+        <div class="panel-header">
+          <h3><i class="fas fa-bug"></i> Errores Semánticos</h3>
+          <span class="error-count" id="sem-error-count">0 errores</span>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr><th>Descripción del Error</th><th>Línea</th><th>Columna</th></tr>
+            </thead>
+            <tbody id="tablaErroresSemanticos">
+              <tr><td class="empty-state success" colspan="3">✓ Sin errores semánticos</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script src="main.js"></script>
 
 </body>
 </html>
