@@ -477,13 +477,7 @@ function descargarResultado(){
   URL.revokeObjectURL(url);
 }
 
-// Asignar funciones globales
-window.analizar = analizar;
-window.descargarResultado = descargarResultado;
-window.toggle = toggle;
-window.showTab = showTab;
-window.exportarASTImagen = exportarASTImagen;
-window.exportarASTPDF = exportarASTPDF;
+
 
 /* ==================== EXPORT FUNCTIONS ==================== */
 
@@ -744,3 +738,10 @@ style.textContent = `
   }
 `;
 document.head.appendChild(style);
+// Asignar funciones globales
+window.analizar = analizar;
+window.descargarResultado = descargarResultado;
+window.toggle = toggle;
+window.showTab = showTab;
+window.exportarASTImagen = exportarASTImagen;
+window.exportarASTPDF = exportarASTPDF;
