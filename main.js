@@ -103,49 +103,22 @@ async function analizar(){
     pyodide.globals.set("ast", ast);
     pyodide.globals.set("simbolos", simbolos);
     let resultadoSemantic = pyodide.runPython(`analizador_semantico(ast, simbolos)`);
-    console.log("Raw Pyodide result for semantic:", resultadoSemantic, "type:", typeof resultadoSemantic);
+    console.log("Raw Pyodide result for semantic:", resultadoSemantic);
     
-    // Convert more carefully - handle dict/list conversion properly
-    let simbolosActualizados = {};
-    let erroresSemanticos = [];
+    // Simple conversion - let Pyodide handle it automatically
+    let conversionResult = resultadoSemantic.toJs();
+    let simbolosActualizados = conversionResult[0] || {};
+    let erroresSemanticos = conversionResult[1] || [];
     
-    try {
-      // Convert tuple to JS - get first element (simbolos dict) and second element (errors list)
-      let simbolosRaw = resultadoSemantic[0];
-      let erroresRaw = resultadoSemantic[1];
-      
-      console.log("simbolosRaw:", simbolosRaw, "type:", typeof simbolosRaw);
-      console.log("erroresRaw:", erroresRaw, "type:", typeof erroresRaw, "length:", erroresRaw ? erroresRaw.length : 'N/A');
-      
-      // Convert simbolos dict to JS object
-      if (simbolosRaw && typeof simbolosRaw === 'object') {
-        simbolosActualizados = simbolosRaw.toJs ? simbolosRaw.toJs() : Object.assign({}, simbolosRaw);
-      }
-      
-      // Convert errors list to JS array
-      if (erroresRaw && typeof erroresRaw === 'object') {
-        if (erroresRaw.toJs) {
-          erroresSemanticos = erroresRaw.toJs();
-        } else if (Array.isArray(erroresRaw)) {
-          erroresSemanticos = erroresRaw;
-        } else if (erroresRaw.length !== undefined) {
-          // It's array-like
-          erroresSemanticos = Array.from(erroresRaw);
-        }
-      }
-    } catch (conversionErr) {
-      console.error("Error in Pyodide conversion:", conversionErr);
-      // Fallback: use toJs with simple conversion
-      let parts = resultadoSemantic.toJs();
-      simbolosActualizados = parts[0] || {};
-      erroresSemanticos = parts[1] || [];
-    }
+    console.log("After toJs() - simbolosActualizados:", simbolosActualizados);
+    console.log("After toJs() - erroresSemanticos:", erroresSemanticos, "type:", typeof erroresSemanticos);
+    console.log("  Is array:", Array.isArray(erroresSemanticos));
+    console.log("  Length:", erroresSemanticos.length || 'N/A');
     
-    console.log("After conversion - Simbolos:", simbolosActualizados);
-    console.log("After conversion - Semantic errors:", erroresSemanticos, "type:", typeof erroresSemanticos, "is array:", Array.isArray(erroresSemanticos));
     if (Array.isArray(erroresSemanticos)) {
-      console.log("  Error count:", erroresSemanticos.length);
-      erroresSemanticos.forEach((e, i) => console.log(`  Error[${i}]:`, e));
+      erroresSemanticos.forEach((e, i) => {
+        console.log(`  Error[${i}]:`, e, {code: e.code, description: e.description, line: e.line, column: e.column});
+      });
     }
     
     ultimoSimbolos = simbolosActualizados;
@@ -155,8 +128,9 @@ async function analizar(){
     mostrarErrores(errores);
     mostrarSimbolos(simbolosActualizados);
     mostrarErroresSintacticos(erroresSintacticos);
-    console.log("About to call mostrarErroresSemanticos with:", erroresSemanticos);
+    console.log(">>> Calling mostrarErroresSemanticos with:", erroresSemanticos);
     mostrarErroresSemanticos(erroresSemanticos);
+    console.log(">>> mostrarErroresSemanticos completed");
     mostrarAST(ast);
 
     updateStatus("Análisis completado", true);
@@ -298,60 +272,52 @@ function mostrarErroresSintacticos(errores){
   document.getElementById("sint-error-count").textContent = `${errores.length} errores`;
 }
 
-function normalizeSemanticErrors(errores) {
-  if (!errores) return [];
-  if (Array.isArray(errores)) return errores;
-  if (typeof errores === 'object' && errores !== null && typeof errores.length === 'number') {
-    try {
-      return Array.from(errores);
-    } catch {
-      return [errores];
-    }
-  }
-  return [errores];
-}
-
 function mostrarErroresSemanticos(errores){
   let tabla = document.getElementById("tablaErroresSemanticos");
   tabla.innerHTML="";
 
   const listaErrores = normalizeSemanticErrors(errores);
-  console.log("=== SEMANTIC ERRORS DEBUG ===");
-  console.log("Semantic errors raw type:", typeof errores, "value:", errores);
-  console.log("Semantic errors normalized:", listaErrores);
-  console.log("List length:", listaErrores.length);
+  console.log("=== MOSTRAR ERRORES SEMANTICOS ===");
+  console.log("Input errores:", errores);
+  console.log("Normalized list:", listaErrores, "length:", listaErrores.length);
 
   if (listaErrores.length === 0) {
     tabla.innerHTML = '<tr><td class="empty-state success" colspan="3">✓ Sin errores semánticos</td></tr>';
     document.getElementById("sem-error-count").textContent = "0 errores";
-    console.log("No semantic errors found");
+    console.log("No errors to display");
     return;
   }
 
-  console.log("Errores semánticos detectados:", listaErrores.length);
+  console.log(`Rendering ${listaErrores.length} semantic errors`);
 
-  let rowCount = 0;
+  let successCount = 0;
   listaErrores.forEach((e, idx)=>{
-    console.log(`Processing error ${idx}:`, e, "type:", typeof e);
+    console.log(`Processing error ${idx}:`, e);
+    
+    if (!e) {
+      console.log(`  Skipping empty error at ${idx}`);
+      return;
+    }
     
     let description = '';
     let line = '';
     let column = '';
     
-    if (e && typeof e === 'object') {
-      if (e.code && e.description) {
-        // Dictionary format from Python
+    // Handle object format from Python (dict with code, description, line, column)
+    if (typeof e === 'object') {
+      if (e.code && e.description !== undefined) {
         description = `[${e.code}] ${e.description}`;
         line = e.line || '';
-        column = e.column || '';
+        column = e.column !== undefined ? e.column : '';
+        console.log(`  -> Rendering object error: desc="${description}", line=${line}, col=${column}`);
       } else {
         description = JSON.stringify(e);
+        console.log(`  -> Rendering as JSON: ${description}`);
       }
     } else {
       description = String(e);
+      console.log(`  -> Rendering as string: ${description}`);
     }
-    
-    console.log(`  -> Rendering as: "${description}", line=${line}, col=${column}`);
     
     tabla.innerHTML += `
     <tr>
@@ -359,12 +325,13 @@ function mostrarErroresSemanticos(errores){
       <td>${line}</td>
       <td>${column}</td>
     </tr>`;
-    rowCount++;
+    
+    successCount++;
   });
 
-  console.log("Total rows rendered:", rowCount);
-  document.getElementById("sem-error-count").textContent = `${rowCount} errores`;
-  console.log("=== END SEMANTIC ERRORS DEBUG ===");
+  console.log(`Successfully rendered ${successCount} errors`);
+  document.getElementById("sem-error-count").textContent = `${successCount} errores`;
+  console.log("=== END MOSTRAR ERRORES SEMANTICOS ===");
 }
 
 function mostrarAST(ast){
