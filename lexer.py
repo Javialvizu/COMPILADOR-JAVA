@@ -101,6 +101,9 @@ class Parser:
         return {"type": "Program", "class_decl": class_decl}
 
     def parse_class_declaration(self):
+        token = self.current_token()
+        if token and token[0] == "KEYWORD" and token[1] == "public":
+            self.consume("KEYWORD", "public")
         self.consume("KEYWORD", "class")
         name_token = self.consume("IDENTIFICADOR")
         if not name_token:
