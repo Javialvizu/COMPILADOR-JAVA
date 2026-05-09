@@ -1,3 +1,8 @@
+"""
+COMPILADOR JAVA - Análisis Léxico, Sintáctico y Semántico
+Versión corregida: detecta errores léxicos, sintácticos y semánticos.
+"""
+
 KEYWORDS = {
     "class", "public", "static", "void", "int", "double", "String",
     "if", "else", "for", "while", "return", "new", "boolean", "char",
@@ -1197,3 +1202,21 @@ def analizador_lexico(codigo):
         columna += 1
 
     return tokens, errores, tabla_simbolos
+
+
+
+# ==================== FUNCIÓN PRINCIPAL PARA JAVASCRIPT ====================
+
+def analizar_todo(codigo):
+    tokens, errores_lexicos, simbolos_lexicos = analizador_lexico(codigo)
+    ast, errores_sintacticos = analizador_sintactico(tokens)
+    simbolos_semanticos, errores_semanticos = analizador_semantico(ast, simbolos_lexicos)
+
+    return {
+        "tokens": tokens,
+        "errores_lexicos": errores_lexicos,
+        "simbolos": simbolos_semanticos,
+        "ast": ast,
+        "errores_sintacticos": errores_sintacticos,
+        "errores_semanticos": errores_semanticos
+    }
