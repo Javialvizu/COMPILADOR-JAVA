@@ -30,7 +30,7 @@ async function iniciarPyodide(){
     console.log("Pyodide loaded successfully");
 
     updateStatus("Cargando código Python...", false);
-    const response = await fetch("lexer.py");
+    const response = await fetch("lexer.py?v=" + Date.now());
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -81,32 +81,32 @@ async function analizar(){
 
     pyodide.globals.set("codigo", codigo);
 
-    let resultado = pyodide.runPython(`analizador_lexico(codigo)`);
-
-    let [tokens, errores, simbolos] = resultado.toJs({
+    // Usamos una función Python completa para evitar problemas de conversión JS <-> Python
+    let resultadoCompleto = pyodide.runPython(`analizar_todo(codigo)`);
+    let datos = resultadoCompleto.toJs({
       dict_converter: Object.fromEntries
     });
+
+    let tokens = datos.tokens || [];
+    let errores = datos.errores_lexicos || [];
+    let simbolosActualizados = datos.simbolos || {};
+    let ast = datos.ast || null;
+    let erroresSintacticos = datos.errores_sintacticos || [];
+    let erroresSemanticos = normalizeSemanticErrors(datos.errores_semanticos || []);
+
+    console.log("=== RESULTADO COMPLETO ===");
+    console.log("Tokens:", tokens);
+    console.log("Errores léxicos:", errores);
+    console.log("Símbolos:", simbolosActualizados);
+    console.log("AST:", ast);
+    console.log("Errores sintácticos:", erroresSintacticos);
+    console.log("Errores semánticos:", erroresSemanticos);
+
     ultimoTokens = tokens;
     ultimoErrores = errores;
-    ultimoSimbolos = simbolos;
-
-    // Parser
-    pyodide.globals.set("tokens", tokens);
-    let resultadoParser = pyodide.runPython(`analizador_sintactico(tokens)`);
-    let [ast, erroresSintacticos] = resultadoParser.toJs({
-      dict_converter: Object.fromEntries
-    });
+    ultimoSimbolos = simbolosActualizados;
     ultimoAST = ast;
     ultimoErroresSintacticos = erroresSintacticos;
-
-    // Semantic
-    pyodide.globals.set("ast", ast);
-    pyodide.globals.set("simbolos", simbolos);
-    let resultadoSemantic = pyodide.runPython(`analizador_semantico(ast, simbolos)`);
-    let [simbolosActualizados, erroresSemanticos] = resultadoSemantic.toJs({
-      dict_converter: Object.fromEntries
-    });
-    ultimoSimbolos = simbolosActualizados;
     ultimoErroresSemanticos = erroresSemanticos;
 
     mostrarTokens(tokens);
@@ -124,15 +124,6 @@ async function analizar(){
     alert("Error al analizar: " + e.message);
   }
 }
-
-function descargarResultado(){
-  ultimoErrores = errores;
-  ultimoSimbolos = simbolos;
-  mostrarTokens(tokens);
-  mostrarErrores(errores);
-  mostrarSimbolos(simbolos);
-}
-
 
 function mostrarTokens(tokens){
   let tabla = document.getElementById("tablaTokens");
@@ -199,8 +190,8 @@ function mostrarSimbolos(simbolos){
     tabla.innerHTML += `
     <tr>
       <td><code style="color: #10b981; font-weight: 600;">${id}</code></td>
-      <td><span style="color: #818cf8;">${data.tipo || 'ID'}</span></td>
-      <td>${data.linea}</td>
+      <td><span style="color: #818cf8;">${data.tipo || data.type || 'ID'}</span></td>
+      <td>${data.linea || data.line || ''}</td>
     </tr>`;
   });
 
@@ -209,6 +200,15 @@ function mostrarSimbolos(simbolos){
 
 function parseErrorDetail(error) {
   if (!error) return { description: '', line: '', column: '' };
+
+  if (typeof error === 'object' && error !== null && !Array.isArray(error)) {
+    return {
+      description: error.description || error.message || JSON.stringify(error),
+      line: error.line || '',
+      column: error.column || error.columna || ''
+    };
+  }
+
   if (Array.isArray(error) && error.length >= 4) {
     return { description: error[0], line: error[2], column: error[3] };
   }
@@ -246,31 +246,103 @@ function mostrarErroresSintacticos(errores){
   document.getElementById("sint-error-count").textContent = `${errores.length} errores`;
 }
 
+function normalizeSemanticErrors(errores) {
+  if (!errores) return [];
+
+  if (Array.isArray(errores)) {
+    return errores;
+  }
+
+  if (typeof errores.toJs === "function") {
+    try {
+      const convertido = errores.toJs({
+        dict_converter: Object.fromEntries
+      });
+      return normalizeSemanticErrors(convertido);
+    } catch (e) {
+      console.warn("No se pudo convertir errores semánticos con toJs:", e);
+    }
+  }
+
+  if (typeof errores === "object" && errores !== null) {
+    try {
+      if (typeof errores[Symbol.iterator] === "function") {
+        return Array.from(errores);
+      }
+    } catch (e) {
+      console.warn("No se pudo convertir errores semánticos iterables:", e);
+    }
+
+    if (errores.code || errores.description || errores.message) {
+      return [errores];
+    }
+
+    return Object.values(errores);
+  }
+
+  return [errores];
+}
+
 function mostrarErroresSemanticos(errores){
   let tabla = document.getElementById("tablaErroresSemanticos");
   tabla.innerHTML="";
 
-  const listaErrores = Array.isArray(errores) ? errores : [errores];
+  const listaErrores = normalizeSemanticErrors(errores);
+  console.log("=== MOSTRAR ERRORES SEMANTICOS ===");
+  console.log("Input errores:", errores);
+  console.log("Normalized list:", listaErrores, "length:", listaErrores.length);
 
-  if (listaErrores.length === 0 || (listaErrores.length === 1 && !listaErrores[0])) {
+  if (listaErrores.length === 0) {
     tabla.innerHTML = '<tr><td class="empty-state success" colspan="3">✓ Sin errores semánticos</td></tr>';
     document.getElementById("sem-error-count").textContent = "0 errores";
+    console.log("No errors to display");
     return;
   }
 
-  console.log("Errores semánticos detectados:", listaErrores);
+  console.log(`Rendering ${listaErrores.length} semantic errors`);
 
-  listaErrores.forEach(e=>{
-    const detalle = parseErrorDetail(e);
+  let successCount = 0;
+  listaErrores.forEach((e, idx)=>{
+    console.log(`Processing error ${idx}:`, e);
+    
+    if (!e) {
+      console.log(`  Skipping empty error at ${idx}`);
+      return;
+    }
+    
+    let description = '';
+    let line = '';
+    let column = '';
+    
+    // Handle object format from Python (dict with code, description, line, column)
+    if (typeof e === 'object') {
+      if (e.code && e.description !== undefined) {
+        description = `[${e.code}] ${e.description}`;
+        line = e.line || '';
+        column = e.column !== undefined ? e.column : '';
+        console.log(`  -> Rendering object error: desc="${description}", line=${line}, col=${column}`);
+      } else {
+        description = JSON.stringify(e);
+        console.log(`  -> Rendering as JSON: ${description}`);
+      }
+    } else {
+      description = String(e);
+      console.log(`  -> Rendering as string: ${description}`);
+    }
+    
     tabla.innerHTML += `
     <tr>
-      <td><span style="color: #fca5a5;">${detalle.description}</span></td>
-      <td>${detalle.line}</td>
-      <td>${detalle.column}</td>
+      <td><span style="color: #fca5a5;">${description}</span></td>
+      <td>${line}</td>
+      <td>${column}</td>
     </tr>`;
+    
+    successCount++;
   });
 
-  document.getElementById("sem-error-count").textContent = `${listaErrores.length} errores`;
+  console.log(`Successfully rendered ${successCount} errors`);
+  document.getElementById("sem-error-count").textContent = `${successCount} errores`;
+  console.log("=== END MOSTRAR ERRORES SEMANTICOS ===");
 }
 
 function mostrarAST(ast){
@@ -402,14 +474,6 @@ function descargarResultado(){
 
   URL.revokeObjectURL(url);
 }
-
-// Asignar funciones globales
-window.analizar = analizar;
-window.descargarResultado = descargarResultado;
-window.toggle = toggle;
-window.showTab = showTab;
-window.exportarASTImagen = exportarASTImagen;
-window.exportarASTPDF = exportarASTPDF;
 
 /* ==================== EXPORT FUNCTIONS ==================== */
 
@@ -670,3 +734,17 @@ style.textContent = `
   }
 `;
 document.head.appendChild(style);
+
+// Asignar funciones globales al final, cuando todas ya existen
+window.analizar = analizar;
+window.descargarResultado = descargarResultado;
+window.toggle = toggle;
+window.showTab = showTab;
+
+if (typeof exportarASTImagen === "function") {
+  window.exportarASTImagen = exportarASTImagen;
+}
+
+if (typeof exportarASTPDF === "function") {
+  window.exportarASTPDF = exportarASTPDF;
+}
