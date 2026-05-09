@@ -101,7 +101,7 @@ async function analizar(){
 
     // Semantic
     pyodide.globals.set("ast", ast);
-    pyodide.globals.set("symbol_table", simbolos);
+    pyodide.globals.set("symbol_table", symbol_table);
     let resultadoSemantic = pyodide.runPython(`analizador_semantico(ast, symbol_table)`);
     console.log("Raw Pyodide result for semantic:", resultadoSemantic);
     
